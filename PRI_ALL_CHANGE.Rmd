@@ -1,0 +1,514 @@
+---
+title: "PRI_ALL_CHANGE"
+author: "Jiaqing Zhang"
+output: word_document
+---
+
+#Import dataset
+```{r}
+library(dplyr)
+library(tidyverse)
+library(haven)
+msb_outcome <- read_sav("~/data/parent behavior items/MSB_AGG.sav")
+msb_selected<-read_sav("~/data/parent behavior items/msb_selected.sav")
+know<-read_sav("~/data/covariate data/additional covariates data 1/knowledge_chw_add.sav")
+pattern<-read_sav("~/data/clinical data/pattern data/MSB_Exam_OUTCOMES_2018.02.07.sav")
+num_touch<-read_sav("~/data/covariate data/additional covariates data 1/num_touches.sav")
+mysb <- read_sav("~/data/covariate data/additional covariates data 1/my smile buddy agg_1_max.sav")
+```
+
+#1.merge datasets
+```{r}
+for(i in 1:8){
+  know[,i+123]<-factor(unlist(know[, i+123]), exclude = NA)
+}
+for(i in 1:10){
+  know[,i+133]<-factor(unlist(know[, i+133]),exclude = NA)
+}
+for(i in 1:16){
+  know[,i+159]<-factor(unlist(know[, i+159]),exclude = NA)
+}
+for(i in 1:4){
+  know[,i+235]<-factor(unlist(know[, i+235]),exclude = NA)
+} 
+
+for(i in 1:14){
+  mysb[, i+1]<-factor(unlist(mysb[, i+1]), exclude = NA)
+}
+
+for (i in 1:5){
+  msb_outcome[, i+1]<-factor(unlist(msb_outcome[, i+1]), exclude = NA)
+  msb_outcome[, i+14]<-factor(unlist(msb_outcome[, i+14]), exclude = NA)
+}
+
+for (i in 1:2){
+   msb_outcome[, i+11]<-factor(unlist(msb_outcome[, i+11]), exclude = NA)
+   msb_outcome[, i+23]<-factor(unlist(msb_outcome[, i+23]), exclude = NA)
+}
+
+
+pre_msb<-msb_outcome[, c(1:12, 14)]
+names(pre_msb)<-sub("_first", "", names(pre_msb))
+post_msb<-msb_outcome[,c(1, 15:25, 28)]
+names(post_msb)<-sub("_last", "", names(pre_msb))
+
+pre_msb$`@96brushing_frequency` <- ifelse(pre_msb$`@96brushing_frequency`==3, 1, 0)
+post_msb$`@96brushing_frequency` <- ifelse(post_msb$`@96brushing_frequency`==3, 1, 0)
+
+pre_msb<-cbind(pre_msb, rep(0, 1146))
+colnames(pre_msb)[14]<-"time"
+post_msb<-cbind(post_msb, rep(1, 1146))
+colnames(post_msb)[14]<-"time"
+
+  pre_msb[, 11] <- as.double(pre_msb[, 11])
+
+  post_msb[, 11] <- as.double(post_msb[, 11])
+  
+  pre_msb[, 12] <- as.double(pre_msb[, 12])
+
+  post_msb[, 12] <- as.double(post_msb[, 12])
+
+#pre_msb$`@96brushing_frequency` <- as.numeric(levels(pre_msb$`@96brushing_frequency`))[pre_msb$`@96brushing_frequency`]
+#pre_msb$`@82clean_pacifier` <- as.numeric(levels(pre_msb$`@82clean_pacifier`))[pre_msb$`@82clean_pacifier`]
+#post_msb$`@96brushing_frequency` <- as.numeric(levels(post_msb$`@96brushing_frequency`))[post_msb$`@96brushing_frequency`]
+#post_msb$`@82clean_pacifier` <- as.numeric(levels(post_msb$`@82clean_pacifier`))[post_msb$`@82clean_pacifier`]
+
+##pre and post knowledge barrier and 33
+knowledge_barr_pre<-know[, c(1,118,120)]
+names(knowledge_barr_pre)<-sub("pre", "", names(knowledge_barr_pre))
+knowledge_barr_post<-know[, c(1,119,121)]
+names(knowledge_barr_post)<-sub("post", "", names(knowledge_barr_post))
+
+knowledge_barr_pre<-cbind(knowledge_barr_pre, rep(0, dim(knowledge_barr_pre)[1]))
+colnames(knowledge_barr_pre)[4]<-"time"
+knowledge_barr_post<-cbind(knowledge_barr_post, rep(1, dim(knowledge_barr_post)[1]))
+colnames(knowledge_barr_post)[4]<-"time"
+
+
+##there are 972/972 subjects after merging the knowledge data and the outcome data
+pre.know.change<-merge(know[, c(1, 124:175, 236:239)], pre_msb, by="msb_id")
+post.know.change<-merge(know[, c(1, 124:175, 236:239)], post_msb, by="msb_id")
+names(pre.know.change)<-sub("outcome_expectation_change", "out_exp_change", names(pre.know.change))
+names(pre.know.change)<-sub("dental_experience_change", "dental_change", names(pre.know.change))
+names(pre.know.change)<-sub("seriousness_change", "serious_change", names(pre.know.change))
+names(pre.know.change)<-sub("seriousness_impro", "serious_impro", names(pre.know.change))
+names(pre.know.change)<-sub("outcome_expe_impro", "out_exp_impro", names(pre.know.change))
+
+names(post.know.change)<-sub("outcome_expectation_change", "out_exp_change", names(post.know.change))
+names(post.know.change)<-sub("dental_experience_change", "dental_change", names(post.know.change))
+names(post.know.change)<-sub("seriousness_change", "serious_change", names(post.know.change))
+names(post.know.change)<-sub("seriousness_impro", "serious_impro", names(post.know.change))
+names(post.know.change)<-sub("outcome_expe_impro", "out_exp_impro", names(post.know.change))
+
+##there are 725/725 subjects after merging the child age data and the outcome data
+pre.childage.change<-merge(pattern[,c(1, 4)], pre_msb, by="msb_id")
+post.childage.change<-merge(pattern[,c(1, 4)], post_msb, by="msb_id")
+
+##there are 1146/1146 subjects after merging the msb data (parent-level) and the outcome data
+pre.mysb.change<-merge(mysb, pre_msb, by="msb_id")
+post.mysb.change<-merge(mysb, post_msb, by="msb_id")
+
+names(pre.mysb.change)<-sub("_max", "", names(pre.mysb.change))
+names(pre.mysb.change)<-sub("self_efficacy", "efficacy", names(pre.mysb.change))
+names(pre.mysb.change)<-sub("_cavities_prevented", "", names(pre.mysb.change))
+names(pre.mysb.change)<-sub("reduceriskfortooth", "reducerisk", names(pre.mysb.change))
+names(pre.mysb.change)<-sub("socialsupport", "support", names(pre.mysb.change))
+
+names(post.mysb.change)<-sub("_max", "", names(post.mysb.change))
+names(post.mysb.change)<-sub("self_efficacy", "efficacy", names(post.mysb.change))
+names(post.mysb.change)<-sub("_cavities_prevented", "", names(post.mysb.change))
+names(post.mysb.change)<-sub("reduceriskfortooth", "reducerisk", names(post.mysb.change))
+names(post.mysb.change)<-sub("socialsupport", "support", names(post.mysb.change))
+
+##there are 978/978 subjects after merging the intervention-level data and the outcome data
+pre.intervention.change<-merge(num_touch[,c(1,9:16)], pre_msb, by="msb_id")
+post.intervention.change<-merge(num_touch[,c(1,9:16)], post_msb, by="msb_id")
+
+
+```
+
+#2.change without any covariates
+```{r}
+library(gee)
+
+#function for EY=alpha+beta*Time
+change.no.cov.log.gee<-function(x){
+    pre<-pre_msb[, c(1, 14, x)]
+    post<-post_msb[, c(1,14, x)]
+    df<-rbind(pre, post)
+    change<-summary(gee(df[,3]~df$time, family = binomial(link="logit"), id=df$msb_id, corstr="exchangeable"))
+    behavior_name<-names(df)[3]
+    coef<-exp(change$coefficients[2, 1])
+    p<-2*pnorm(abs(change$coefficients[2, 5]), lower.tail = FALSE)
+    ci.low<-exp(change$coefficients[2, 1]-1.96*change$coefficients[2,4])
+    ci.upper<-exp(change$coefficients[2, 1]+1.96*change$coefficients[2,4])
+    return(list(coef, p, ci.low, ci.upper,behavior_name))
+}
+
+change.no.cov.gee<-function(x){
+  pre<-pre_msb[, c(1, 14, x)]
+  post<-post_msb[, c(1,14, x)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,3]~df$time, id=df$msb_id, corstr="exchangeable", family =gaussian(link = "identity")))
+  behavior_name<-names(df)[3]
+  coef<-change$coefficients[2,1]
+  p<-2*pnorm(abs(change$coefficients[2, 5]), lower.tail = FALSE)
+  ci.low<-coef-1.96*change$coefficients[2,4]
+  ci.upper<-coef+1.96*change$coefficients[2,4]
+  return(list(coef, p, ci.low, ci.upper,behavior_name))
+}
+
+
+behaviro.change1<-matrix(, nrow=5, ncol=4)
+behaviro.change1.1<-matrix(, nrow=1, ncol=4)
+behaviro.change2<-matrix(, nrow=6, ncol=4)
+for (i in 1:5){
+  for(j in 1:4){
+  behaviro.change1[i,j]<-change.no.cov.log.gee(i+1)[[j]]
+  behaviro.change1<-round(behaviro.change1, 4)
+  rownames(behaviro.change1)<-colnames(pre_msb[, c(2:6)])
+  }
+}
+
+  for(j in 1:4){
+  behaviro.change1.1[1,j]<-change.no.cov.log.gee(13)[[j]]
+  behaviro.change1.1<-round(behaviro.change1.1, 4)
+  rownames(behaviro.change1.1)<-colnames(pre_msb)[13]
+  }
+
+
+for (i in 1:6){
+  for(j in 1:4){
+  behaviro.change2[i,j]<-change.no.cov.gee(i+6)[[j]]
+  behaviro.change2<-round(behaviro.change2, 4)
+  rownames(behaviro.change2)<-colnames(pre_msb[, c(7:12)])
+  }
+}
+
+behaviro.change<-rbind(behaviro.change1, behaviro.change1.1)%>%rbind(behaviro.change2)
+colnames(behaviro.change)<-c("behavior_change", "p_value", "CI-lower", "CI-upper")
+behaviro.change
+```
+
+
+```{r}
+change.no.cov.gee.know<-function(x){
+  pre<-knowledge_barr_pre[, c(1, 4, x)]
+  post<-knowledge_barr_post[, c(1, 4, x)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,3]~df$time, id=df$msb_id, corstr="exchangeable", family =gaussian(link = "identity")))
+  behavior_name<-names(df)[3]
+  coef<-change$coefficients[2,1]
+  p<-2*pnorm(abs(change$coefficients[2, 5]), lower.tail = FALSE)
+  ci.low<-coef-1.96*change$coefficients[2,4]
+  ci.upper<-coef+1.96*change$coefficients[2,4]
+  return(list(coef, p, ci.low, ci.upper,behavior_name))
+}
+
+
+behaviro.change3<-matrix(, nrow=2, ncol=4)
+for (i in 1:2){
+  for(j in 1:4){
+  behaviro.change3[i,j]<-change.no.cov.gee.know(i+1)[[j]]
+  behaviro.change3<-round(behaviro.change3, 4)
+  rownames(behaviro.change3)<-colnames(knowledge_barr_pre[, c(2:3)])
+  }
+}
+colnames(behaviro.change3)<-c("behavior_change", "p_value", "CI-lower", "CI-upper")
+
+behaviro.change3
+
+```
+
+#2. function with covariates
+```{r}
+##for covariates with two levels or continuous
+change.gee.binary.2<-function(dat1,dat2, x, y, z){
+  #x is the covariate, y is the outcome, z is the time
+  pre<-dat1[, c(1, z, x, y)]
+  post<-dat2[, c(1, z, x, y)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,4]~df$time+df[,3]+df$time:df[,3], id=df$msb_id, corstr="exchangeable", family =binomial(link = "logit")))
+  coef<-exp(change$coefficients[4, 1])
+  p<-2*pnorm(abs(change$coefficients[4,5]), lower.tail = FALSE)
+  ci.low<-exp(change$coefficients[4, 1]-1.96*change$coefficients[4,4])
+  ci.upper<-exp(change$coefficients[4, 1]+1.96*change$coefficients[4,4])
+  know_name<-names(df)[4]
+  cov_name<-names(df)[3]
+  return(list(coef, p, ci.low, ci.upper, know_name, cov_name))
+}
+
+change.gee.2<-function(dat1,dat2, x, y, z){
+  #x is the covariate, y is the outcome, z is the time
+  pre<-dat1[, c(1, z, x, y)]
+  post<-dat2[, c(1, z, x, y)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,4]~df$time+df[,3]+df$time:df[,3], id=df$msb_id, corstr="exchangeable", family =gaussian(link = "identity")))
+  coef<-change$coefficients[4, 1]
+  p<-2*pnorm(abs(change$coefficients[4,5]), lower.tail = FALSE)
+  ci.low<-coef-1.96*change$coefficients[4,4]
+  ci.upper<-coef+1.96*change$coefficients[4,4]
+  know_name<-names(df)[4]
+  cov_name<-names(df)[3]
+  return(list(coef, p, ci.low, ci.upper, know_name, cov_name))
+}
+
+#for covariates with 3 levels
+change.gee.binary.3<-function(dat1,dat2, x1, x2,y, z){
+  #x is the covariate, y is the outcome, z is the time
+  pre<-dat1[, c(1, z, x1, x2, y)]
+  post<-dat2[, c(1, z, x1, x2, y)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,5]~df$time+df[,3]+df[,4]+df$time:df[,3]+df$time:df[,4], id=df$msb_id, corstr="exchangeable", family =binomial(link = "logit")))
+  coef1<-exp(change$coefficients[5, 1])
+  p1<-2*pnorm(abs(change$coefficients[5,5]), lower.tail = FALSE)
+  ci.low1<-exp(change$coefficients[5, 1]-1.96*change$coefficients[5,4])
+  ci.upper1<-exp(change$coefficients[5, 1]+1.96*change$coefficients[5,4])
+  coef2<-exp(change$coefficients[6, 1])
+  p2<-2*pnorm(abs(change$coefficients[6,5]), lower.tail = FALSE)
+  ci.low2<-exp(change$coefficients[6, 1]-1.96*change$coefficients[6,4])
+  ci.upper2<-exp(change$coefficients[6, 1]+1.96*change$coefficients[6,4])
+  know_name<-names(df)[5]
+  cov_name1<-names(df)[3]
+  cov_name2<-names(df)[4]
+  return(list(coef1, p1, ci.low1, ci.upper1, coef2, p2, ci.low2, ci.upper2, know_name, cov_name1, cov_name2))
+}
+
+change.gee.3<-function(dat1,dat2, x1, x2, y, z){
+  #x is the covariate, y is the outcome, z is the time
+ pre<-dat1[, c(1, z, x1, x2, y)]
+  post<-dat2[, c(1, z, x1, x2, y)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,5]~df$time+df[,3]+df[,4]+df$time:df[,3]+df$time:df[,4], id=df$msb_id, corstr="exchangeable", family =gaussian(link = "identity")))
+ coef1<-change$coefficients[5, 1]
+  p1<-2*pnorm(abs(change$coefficients[5,5]), lower.tail = FALSE)
+  ci.low1<-coef1-1.96*change$coefficients[5,4]
+  ci.upper1<-coef1+1.96*change$coefficients[5,4]
+  coef2<-change$coefficients[6, 1]
+  p2<-2*pnorm(abs(change$coefficients[6,5]), lower.tail = FALSE)
+  ci.low2<-coef2-1.96*change$coefficients[6,4]
+  ci.upper2<-coef2+1.96*change$coefficients[6,4]
+  know_name<-names(df)[5]
+  cov_name1<-names(df)[3]
+  cov_name2<-names(df)[4]
+  return(list(coef1, p1, ci.low1, ci.upper1, coef2, p2, ci.low2, ci.upper2, know_name, cov_name1, cov_name2))
+}
+
+
+#for covariates with 4 levels
+change.gee.binary.4<-function(dat1,dat2, x1, x2, x3, y, z){
+  #x is the covariate, y is the outcome, z is the time
+  pre<-dat1[, c(1, z, x1, x2, x3, y)]
+  post<-dat2[, c(1, z, x1, x2, x3, y)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,6]~df$time+df[,3]+df[,4]+df[,5]+df$time:df[,3]+df$time:df[,4]+df$time:df[,5], id=df$msb_id, corstr="exchangeable", family =binomial(link = "logit")))
+  coef1<-exp(change$coefficients[6, 1])
+  p1<-2*pnorm(abs(change$coefficients[6,5]), lower.tail = FALSE)
+  ci.low1<-exp(change$coefficients[6, 1]-1.96*change$coefficients[6,4])
+  ci.upper1<-exp(change$coefficients[6, 1]+1.96*change$coefficients[6,4])
+  coef2<-exp(change$coefficients[7, 1])
+  p2<-2*pnorm(abs(change$coefficients[7,5]), lower.tail = FALSE)
+  ci.low2<-exp(change$coefficients[7, 1]-1.96*change$coefficients[7,4])
+  ci.upper2<-exp(change$coefficients[7, 1]+1.96*change$coefficients[7,4])
+  coef3<-exp(change$coefficients[8, 1])
+  p3<-2*pnorm(abs(change$coefficients[8,5]), lower.tail = FALSE)
+  ci.low3<-exp(change$coefficients[8, 1]-1.96*change$coefficients[8,4])
+  ci.upper3<-exp(change$coefficients[8, 1]+1.96*change$coefficients[8,4])
+  know_name<-names(df)[6]
+  cov_name1<-names(df)[3]
+  cov_name2<-names(df)[4]
+  cov_name3<-names(df)[5]
+  return(list(coef1, p1, ci.low1, ci.upper1, coef2, p2, ci.low2, ci.upper2, coef3, p3, ci.low3, ci.upper3, know_name, cov_name1, cov_name2, cov_name3))
+}
+
+change.gee.4<-function(dat1,dat2, x1, x2, x3, y, z){
+  #x is the covariate, y is the outcome, z is the time
+  pre<-dat1[, c(1, z, x1, x2, x3, y)]
+  post<-dat2[, c(1, z, x1, x2, x3, y)]
+  df<-rbind(pre, post)
+  change<-summary(gee(df[,6]~df$time+df[,3]+df[,4]+df[,5]+df$time:df[,3]+df$time:df[,4]+df$time:df[,5], id=df$msb_id, corstr="exchangeable", family =gaussian(link = "identity")))
+  coef1<-change$coefficients[6, 1]
+  p1<-2*pnorm(abs(change$coefficients[6,5]), lower.tail = FALSE)
+  ci.low1<-coef1-1.96*change$coefficients[6,4]
+  ci.upper1<-coef1+1.96*change$coefficients[6,4]
+  coef2<-change$coefficients[7, 1]
+  p2<-2*pnorm(abs(change$coefficients[7,5]), lower.tail = FALSE)
+  ci.low2<-coef2-1.96*change$coefficients[7,4]
+  ci.upper2<-coef2+1.96*change$coefficients[7,4]
+  coef3<-change$coefficients[8, 1]
+  p3<-2*pnorm(abs(change$coefficients[8,5]), lower.tail = FALSE)
+  ci.low3<-coef3-1.96*change$coefficients[8,4]
+  ci.upper3<-coef3+1.96*change$coefficients[8,4]
+  know_name<-names(df)[6]
+  cov_name1<-names(df)[3]
+  cov_name2<-names(df)[4]
+  cov_name3<-names(df)[5]
+  return(list(coef1, p1, ci.low1, ci.upper1, coef2, p2, ci.low2, ci.upper2, coef3, p3, ci.low3, ci.upper3, know_name, cov_name1, cov_name2, cov_name3))
+}
+
+```
+
+#3.Covariates in the knowledge dataset
+```{r}
+change.cov.know<-function (j){
+  change_covar1<-matrix(, nrow=5, ncol=4)
+  change_covar2<-matrix(, nrow=6, ncol=4)
+  for (i in 1:5){
+    for (h in 1:4){
+  change_covar1[i,h]<-change.gee.binary.2(pre.know.change, post.know.change, j, i+57, 70)[[h]]
+    colnames(change_covar1)<-c(change.gee.binary.2(pre.know.change, post.know.change,  j, i+57, 70)[[6]], "p_value", "CI-lower", "CI-upper")
+    }}
+  for (i in 1:6){
+    for (h in 1:4){
+  change_covar2[i,h]<-change.gee.2(pre.know.change, post.know.change, j, i+62, 70)[[h]]
+  colnames(change_covar2)<-c(change.gee.2(pre.know.change, post.know.change,  j, i+62, 70)[[6]], "p_value", "CI-lower", "CI-upper")
+    }
+  }
+  change.cov<-rbind(change_covar1, change_covar2)
+  row.names(change.cov)<-colnames(pre.know.change)[58:68]
+  change.cov<-round(change.cov,4)
+  return(change.cov)
+  }
+  
+ change.know<-lapply(c(3:7,10:15,22:57),change.cov.know)
+ change.know
+ 
+ 
+change.caseload1<-matrix(,5,8) 
+change.caseload2<-matrix(,6,8)
+for(i in 1:5){
+  for (j in 1:8){
+    change.caseload1[i, j]<-change.gee.binary.3(pre.know.change, post.know.change, 20, 21, i+57, 69)[[j]]
+  }
+}
+for(i in 1:6){
+  for (j in 1:8){
+    change.caseload2[i, j]<-change.gee.3(pre.know.change, post.know.change, 20, 21, i+62, 69)[[j]]
+  }
+}
+  change.caseload<-rbind(change.caseload1, change.caseload2)
+  row.names(change.caseload)<-colnames(pre.know.change)[58:68]
+  colnames(change.caseload)<-c("CHW_lowcaseload", "p_value","CI-lower", "CI-upper", "CHW_mediumcaseload", "p-value","CI-lower", "CI-upper")
+  change.caseload<-round(change.caseload,4)
+change.caseload
+
+change.cbo1<-matrix(,5,12) 
+change.cbo2<-matrix(,6,12)
+for(i in 1:5){
+  for (j in 1:12){
+    change.cbo1[i, j]<-change.gee.binary.4(pre.know.change, post.know.change, 17, 18, 19, i+57, 69)[[j]]
+  }
+}
+
+for (i in 1:6){
+  for (j in 1:12){
+      change.cbo2[i, j]<-change.gee.4(pre.know.change, post.know.change, 17, 18, 19, i+62, 69)[[j]]
+  }
+}
+  change.cbo<-rbind(change.cbo1, change.cbo2)
+  row.names(change.cbo)<-colnames(pre.know.change)[58:68]
+  colnames(change.cbo)<-c("CBO_NMPP", "p_value","CI-lower", "CI-upper", "CBO_Montefiore", "p-value","CI-lower", "CI-upper","CBO_Ryannena", "p-value","CI-lower", "CI-upper")
+  change.cbo<-round(change.cbo,4)
+change.cbo
+```
+
+#4.Covariates in the child age dataset
+```{r}
+change.childage1<-matrix(,5,4) 
+change.childage2<-matrix(,6,4)
+for(i in 1:5){
+  for (j in 1:4){
+    change.childage1[i, j]<-change.gee.binary.2(pre.childage.change, post.childage.change, 2, i+2, 15)[[j]]
+  }}
+for (i in 1:6){
+  for (j in 1:4){
+    change.childage2[i, j]<-change.gee.2(pre.childage.change, post.childage.change, 2, i+7, 15)[[j]]
+  }
+}
+  change.childage<-rbind(change.childage1, change.childage2)
+  row.names(change.childage)<-colnames(pre.childage.change)[3:13]
+  colnames(change.childage)<-c("child age", "p_value","CI-lower", "CI-upper")
+  change.childage<-round(change.childage,4)
+change.childage
+```
+
+#5.Covariates in the MSB dataset
+```{r}
+change.cov.msb<-function (j){
+  change_covar1<-matrix(, nrow=5, ncol=4)
+  change_covar2<-matrix(, nrow=6, ncol=4)
+
+  for (i in 1:5){
+    for (h in 1:4){
+  change_covar1[i,h]<-change.gee.binary.2(pre.mysb.change, post.mysb.change, j, i+15, 28)[[h]]
+  colnames(change_covar1)<-c(change.gee.binary.2(pre.mysb.change, post.mysb.change, j, i+15, 28)[[6]], "p_value", "CI-lower", "CI-upper")
+    }
+  }
+  
+  for (i in 1:6){
+    for (h in 1:4){
+  change_covar2[i,h]<-change.gee.2(pre.mysb.change, post.mysb.change, j, i+20, 27)[[h]]  
+  colnames(change_covar2)<-c(change.gee.2(pre.mysb.change, post.mysb.change, j, i+20, 27)[[6]], "p_value", "CI-lower", "CI-upper")
+    }
+  }
+
+  change.cov<-rbind(change_covar1, change_covar2)
+  row.names(change.cov)<-colnames(pre.mysb.change)[16:26]
+  change.cov<-round(change.cov,4)
+  return(change.cov)
+  }
+  
+ change.mysb<-lapply(c(2, 6:15),change.cov.msb)
+ change.mysb
+ 
+ 
+##education level 
+ change.pared1<-matrix(,5,8) 
+ change.pared2<-matrix(,6,8)
+  for(i in 1:5){
+    for (j in 1:8){
+      change.pared1[i, j]<-change.gee.binary.3(pre.mysb.change, post.mysb.change, 4, 5, i+15, 27)[[j]]
+    }
+  }
+ for (i in 1:6){
+   for (j in 1:8){
+     change.pared2[i, j]<-change.gee.3(pre.mysb.change, post.mysb.change, 4, 5, i+20, 27)[[j]]
+   }
+ }
+    change.pared<-rbind(change.pared1, change.pared2)
+    row.names(change.pared)<-colnames(pre.mysb.change)[16:26]
+    colnames(change.pared)<-c("par less than high school", "p_value","CI-lower", "CI-upper", "par high school", "p-value","CI-lower", "CI-upper")
+    change.pared<-round(change.pared,4)
+  change.pared
+```
+
+#6.Covariates in the Intervention dataset
+```{r}
+change.cov.intervention<-function (j){
+  change_covar1<-matrix(, nrow=5, ncol=4)
+  change_covar2<-matrix(, nrow=6, ncol=4)
+
+  for (i in 1:5){
+    for (h in 1:4){
+  change_covar1[i,h]<-change.gee.binary.2(pre.intervention.change, post.intervention.change, j, i+9, 21)[[h]]
+  colnames(change_covar1)<-c(change.gee.binary.2(pre.intervention.change, post.intervention.change, j, i+9, 21)[[6]], "p_value", "CI-lower", "CI-upper")
+  }}
+  
+  for (i in 1:6){
+    for (h in 1:4){
+  change_covar2[i,h]<-change.gee.2(pre.intervention.change, post.intervention.change, j, i+14, 21)[[h]]  
+  colnames(change_covar2)<-c(change.gee.2(pre.intervention.change, post.intervention.change, j, i+14, 21)[[6]], "p_value", "CI-lower", "CI-upper")
+    }
+  }
+
+  change.cov<-rbind(change_covar1, change_covar2)
+  row.names(change.cov)<-colnames(pre.intervention.change)[10:20]
+  change.cov<-round(change.cov,4)
+  return(change.cov)
+}
+  
+ change.intervention<-lapply(c(2,3,5:9), change.cov.intervention)
+ change.intervention
+```
+
+

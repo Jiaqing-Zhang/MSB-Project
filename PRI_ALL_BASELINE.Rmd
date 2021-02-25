@@ -1,0 +1,772 @@
+---
+title: "PRI_ALL ITEMS"
+author: "Jiaqing Zhang"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+#Import dataset
+```{r}
+library(haven)
+msb_outcome <- read_sav("~/data/parent behavior items/MSB_AGG.sav")
+know<-read_sav("~/data/covariate data/additional covariates data 1/knowledge_chw_add.sav")
+pattern<-read_sav("~/data/clinical data/pattern data/MSB_Exam_OUTCOMES_2018.02.07.sav")
+num_touch<-read_sav("~/data/covariate data/additional covariates data 1/num_touches.sav")
+mysb <- read_sav("~/data/covariate data/additional covariates data 1/my smile buddy agg_1_max.sav")
+msb_selected<-read_sav("~/data/parent behavior items/msb_selected.sav")
+```
+
+#########################################################
+BASELINE
+#########################################################
+#1. Merge datasets
+```{r}
+for(i in 1:8){
+  know[,i+123]<-factor(unlist(know[, i+123]), exclude = NA)
+}
+for(i in 1:10){
+  know[,i+133]<-factor(unlist(know[, i+133]),exclude = NA)
+}
+for(i in 1:16){
+  know[,i+159]<-factor(unlist(know[, i+159]),exclude = NA)
+}
+for(i in 1:4){
+  know[,i+235]<-factor(unlist(know[, i+235]),exclude = NA)
+} 
+
+for(i in 1:14){
+  mysb[, i+1]<-factor(unlist(mysb[, i+1]), exclude = NA)
+}
+
+for (i in 1:5){
+  msb_outcome[, i+1]<-factor(unlist(msb_outcome[, i+1]), exclude = NA)
+  msb_outcome[, i+14]<-factor(unlist(msb_outcome[, i+13]), exclude = NA)
+}
+
+for (i in 1:2){
+   msb_outcome[, i+12]<-factor(unlist(msb_outcome[, i+11]), exclude = NA)
+   msb_outcome[, i+27]<-factor(unlist(msb_outcome[, i+23]), exclude = NA)
+}
+
+for (i in 1:2){
+  msb_selected[, i+23]<-factor(unlist(msb_selected[, i+23]), exclude = NA)
+}
+
+names(msb_outcome)<-sub("_first", "", names(msb_outcome))
+
+##pre and post knowledge barrier and 33
+knowledge_barr_pre<-know[, c(1,118,120)]
+knowledge_barr_post<-know[, c(1,119,121)]
+
+##there are 972 subjects after merging the knowledge data and the outcome data
+init.know<-merge(know[, c(1, 124:175, 236:239)], msb_outcome,  by="msb_id") 
+dim(init.know)
+names(init.know)<-sub("outcome_expectation_change", "out_exp_change", names(init.know))
+names(init.know)<-sub("dental_experience_change", "dental_change", names(init.know))
+names(init.know)<-sub("seriousness_change", "serious_change", names(init.know))
+names(init.know)<-sub("seriousness_impro", "serious_impro", names(init.know))
+names(init.know)<-sub("outcome_expe_impro", "out_exp_impro", names(init.know))
+
+##there are 725 subjects after merging the child age data and the outcome data
+init.childage<-merge(pattern[,c(1, 4)], msb_outcome, by="msb_id") 
+dim(init.childage)
+
+##there are 1146 subjects after merging the msb data (parent-level) and the outcome data
+init.mysb<-merge(mysb, msb_outcome, by="msb_id")
+dim(init.mysb)
+names(init.mysb)<-sub("_max", "", names(init.mysb))
+names(init.mysb)<-sub("self_efficacy", "efficacy", names(init.mysb))
+names(init.mysb)<-sub("_cavities_prevented", "", names(init.mysb))
+names(init.mysb)<-sub("reduceriskfortooth", "reducerisk", names(init.mysb))
+names(init.mysb)<-sub("socialsupport", "support", names(init.mysb))
+
+
+##there are 978 subjects after merging the intervention-level data and the outcome data
+init.interven<-merge(num_touch, msb_outcome, by="msb_id")
+dim(init.interven)
+
+
+```
+
+#1. Covariates in the knowledge dataset--regression model, logistic regression model, multinomial logistic regression model
+```{r}
+library(nnet)
+init.log.reg.know<-function(x, y){
+  log.reg<-summary(glm(x~y, family = binomial(link="logit")))
+  coef<-exp(log.reg$coefficients[2,1])
+  low.ci<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  return(list(coef, log.reg$coefficients[2,4], low.ci, upper.ci))
+}
+
+init.reg.know<-function(x, y){
+  lm.reg<-summary(lm(x~y))
+  low.ci<-lm.reg$coefficients[2,1]-1.96*lm.reg$coefficients[2,2]
+  upper.ci<-lm.reg$coefficients[2,1]+1.96*lm.reg$coefficients[2,2]
+  return(list(lm.reg$coefficients[2,1], lm.reg$coefficients[2,4], low.ci, upper.ci))
+}
+
+init.pol.reg.know<-function(x, y){
+  pol.reg<-summary(multinom(x~y))
+  coef.1<-exp(pol.reg$coefficients[1, 2])
+  coef.2<-exp(pol.reg$coefficients[2, 2])
+  z<-pol.reg$coefficients/pol.reg$standard.errors
+  p<-(1 - pnorm(abs(z), 0, 1))*2
+  p1<-p[1, 2]
+  p2<-p[2, 2]
+  low.ci1<-exp(pol.reg$coefficients[1, 2]-1.96*pol.reg$standard.errors[1, 2])
+  upper.ci1<-exp(pol.reg$coefficients[1, 2]+1.96*pol.reg$standard.errors[1, 2])
+  low.ci2<-exp(pol.reg$coefficients[2, 2]-1.96*pol.reg$standard.errors[2, 2])
+  upper.ci2<-exp(pol.reg$coefficients[2, 2]+1.96*pol.reg$standard.errors[2, 2])
+  return(list(coef.1, p1, low.ci1, upper.ci1,coef.2, p2, low.ci2, upper.ci2))
+}
+
+init.know.cov.1<-function(j){
+  co_matr1<-matrix( , 5, 4)
+  for(i in 1:5){
+    co_matr1[i,1]<-init.log.reg.know(init.know[,i+57],init.know[,j])[[1]]
+    co_matr1[i,2]<-init.log.reg.know(init.know[,i+57],init.know[,j])[[2]]
+    co_matr1[i,3]<-init.log.reg.know(init.know[,i+57],init.know[,j])[[3]]
+    co_matr1[i,4]<-init.log.reg.know(init.know[,i+57],init.know[,j])[[4]]
+    rownames(co_matr1)<-colnames(init.know[,c(58:62)])
+    colnames(co_matr1)<-c(colnames(init.know)[j], "p_value", "CI-lower", "CI-upper")
+  }
+  co_matr1<-round(co_matr1,4)
+  
+  co_matr2<-matrix( , 6, 4)
+  for(i in 1:6){
+    co_matr2[i,1]<-init.reg.know(init.know[,i+62],init.know[,j])[[1]]
+    co_matr2[i,2]<-init.reg.know(init.know[,i+62],init.know[,j])[[2]]
+    co_matr2[i,3]<-init.reg.know(init.know[,i+62],init.know[,j])[[3]]
+    co_matr2[i,4]<-init.reg.know(init.know[,i+62],init.know[,j])[[4]]
+    rownames(co_matr2)<-colnames(init.know[,c(63:68)])
+    colnames(co_matr2)<-c(colnames(init.know)[j], "p_value", "CI-lower", "CI-upper")
+  }
+  co_matr2<-round(co_matr2,4)  
+  
+  co_matr3<-matrix( , 4, 4)
+    co_matr3[1,1]<-init.pol.reg.know(init.know[,69],init.know[,j])[[1]]
+    co_matr3[1,2]<-init.pol.reg.know(init.know[,69],init.know[,j])[[2]]
+    co_matr3[1,3]<-init.pol.reg.know(init.know[,69],init.know[,j])[[3]]
+    co_matr3[1,4]<-init.pol.reg.know(init.know[,69],init.know[,j])[[4]]
+    co_matr3[2,1]<-init.pol.reg.know(init.know[,69],init.know[,j])[[5]]
+    co_matr3[2,2]<-init.pol.reg.know(init.know[,69],init.know[,j])[[6]]
+    co_matr3[2,3]<-init.pol.reg.know(init.know[,69],init.know[,j])[[7]]
+    co_matr3[2,4]<-init.pol.reg.know(init.know[,69],init.know[,j])[[8]]
+    co_matr3[3,1]<-init.pol.reg.know(init.know[,70],init.know[,j])[[1]]
+    co_matr3[3,2]<-init.pol.reg.know(init.know[,70],init.know[,j])[[2]]
+    co_matr3[3,3]<-init.pol.reg.know(init.know[,70],init.know[,j])[[3]]
+    co_matr3[3,4]<-init.pol.reg.know(init.know[,70],init.know[,j])[[4]]
+    co_matr3[4,1]<-init.pol.reg.know(init.know[,70],init.know[,j])[[5]]
+    co_matr3[4,2]<-init.pol.reg.know(init.know[,70],init.know[,j])[[6]]
+    co_matr3[4,3]<-init.pol.reg.know(init.know[,70],init.know[,j])[[7]]
+    co_matr3[4,4]<-init.pol.reg.know(init.know[,70],init.know[,j])[[8]]
+    rownames(co_matr3)<-c("@90floss once","@90floss twice or more", "@96brush once", "@96brush twice or more")
+    colnames(co_matr3)<-c(colnames(init.know)[j], "p_value", "CI-lower", "CI-upper")
+
+  co_matr3<-round(co_matr3,4)
+  
+  co_matr4<-rbind(co_matr1, co_matr2, co_matr3)
+  
+  return(co_matr4)
+}
+    
+init.cov.know<-lapply(c(2:7, 10:15, 22:57), init.know.cov.1)
+init.cov.know
+
+##caseload
+init.log.reg.caseload<-function(x){
+  log.reg<-summary(glm(x~init.know$CHW_lowcaseload+init.know$CHW_mediumcaseload, family = binomial(link="logit")))
+  low.ci1<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci1<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  low.ci2<-exp(log.reg$coefficients[3,1]-1.96*log.reg$coefficients[3,2])
+  upper.ci2<-exp(log.reg$coefficients[3,1]+1.96*log.reg$coefficients[3,2])
+  return(list(exp(log.reg$coefficients[2,1]), log.reg$coefficients[2,4], low.ci1, upper.ci1,exp(log.reg$coefficients[3,1]), log.reg$coefficients[3,4], low.ci2, upper.ci2 ))
+}
+
+init.reg.caseload<-function(x){
+  lm.reg<-summary(lm(x~init.know$CHW_lowcaseload+init.know$CHW_mediumcaseload))
+  low.ci1<-lm.reg$coefficients[2,1]-1.96*lm.reg$coefficients[2,2]
+  upper.ci1<-lm.reg$coefficients[2,1]+1.96*lm.reg$coefficients[2,2]
+  low.ci2<-lm.reg$coefficients[3,1]-1.96*lm.reg$coefficients[3,2]
+  upper.ci2<-lm.reg$coefficients[3,1]+1.96*lm.reg$coefficients[3,2]
+  return(list(lm.reg$coefficients[2,1], lm.reg$coefficients[2,4], low.ci1, upper.ci1, lm.reg$coefficients[3,1], lm.reg$coefficients[3,4], low.ci2, upper.ci2))
+}
+
+init.pol.reg.caseload<-function(x){
+  pol.reg<-summary(multinom(x~init.know$CHW_lowcaseload+init.know$CHW_mediumcaseload))
+  coef.1<-exp(pol.reg$coefficients[1, 2])
+  coef.2<-exp(pol.reg$coefficients[1, 3])
+  coef.3<-exp(pol.reg$coefficients[2, 2])
+  coef.4<-exp(pol.reg$coefficients[2, 3])
+  
+  z<-pol.reg$coefficients/pol.reg$standard.errors
+  p<-(1 - pnorm(abs(z), 0, 1))*2
+  p1<-p[1, 2]
+  p2<-p[1, 3]
+  p3<-p[2, 2]
+  p4<-p[2, 3]
+  low.ci1<-exp(pol.reg$coefficients[1, 2]-1.96*pol.reg$standard.errors[1, 2])
+  upper.ci1<-exp(pol.reg$coefficients[1, 2]+1.96*pol.reg$standard.errors[1, 2])
+  low.ci2<-exp(pol.reg$coefficients[1, 3]-1.96*pol.reg$standard.errors[1, 3])
+  upper.ci2<-exp(pol.reg$coefficients[1, 3]+1.96*pol.reg$standard.errors[1, 3])
+  low.ci3<-exp(pol.reg$coefficients[2, 2]-1.96*pol.reg$standard.errors[2, 2])
+  upper.ci3<-exp(pol.reg$coefficients[2, 2]+1.96*pol.reg$standard.errors[2, 2])
+  low.ci4<-exp(pol.reg$coefficients[2, 3]-1.96*pol.reg$standard.errors[2, 3])
+  upper.ci4<-exp(pol.reg$coefficients[2, 3]+1.96*pol.reg$standard.errors[2, 3])
+  return(list(coef.1, p1, low.ci1, upper.ci1,coef.2, p2, low.ci2, upper.ci2, coef.3, p3, low.ci3, upper.ci3,coef.4, p4, low.ci4, upper.ci4))
+}
+
+init.cov.caseload.matr1<-matrix(, 5, 8)
+init.cov.caseload.matr2<-matrix(, 5, 8)
+init.cov.caseload.matr3<-matrix(, 8, 4)
+
+for (i in 1:5){
+    init.cov.caseload.matr1[i,1]<-init.log.reg.caseload(init.know[,i+57])[[1]]
+    init.cov.caseload.matr1[i,2]<-init.log.reg.caseload(init.know[,i+57])[[2]]
+    init.cov.caseload.matr1[i,3]<-init.log.reg.caseload(init.know[,i+57])[[3]]
+    init.cov.caseload.matr1[i,4]<-init.log.reg.caseload(init.know[,i+57])[[4]]
+    init.cov.caseload.matr1[i,5]<-init.log.reg.caseload(init.know[,i+57])[[5]]
+    init.cov.caseload.matr1[i,6]<-init.log.reg.caseload(init.know[,i+57])[[6]]
+    init.cov.caseload.matr1[i,7]<-init.log.reg.caseload(init.know[,i+57])[[7]]
+    init.cov.caseload.matr1[i,8]<-init.log.reg.caseload(init.know[,i+57])[[8]]
+    rownames(init.cov.caseload.matr1)<-colnames(init.know[,c(58:62)])
+    colnames(init.cov.caseload.matr1)<-c("CHW_lowcaseload","p_value", "CI-lower", "CI-upper", "CHW_mediumcaseload","p_value", "CI-lower", "CI-upper")
+    init.cov.caseload.matr2[i,1]<-init.reg.caseload(init.know[,i+62])[[1]]
+    init.cov.caseload.matr2[i,2]<-init.reg.caseload(init.know[,i+62])[[2]]
+    init.cov.caseload.matr2[i,3]<-init.reg.caseload(init.know[,i+62])[[3]]
+    init.cov.caseload.matr2[i,4]<-init.reg.caseload(init.know[,i+62])[[4]]
+    init.cov.caseload.matr2[i,5]<-init.reg.caseload(init.know[,i+62])[[5]]
+    init.cov.caseload.matr2[i,6]<-init.reg.caseload(init.know[,i+62])[[6]]
+    init.cov.caseload.matr2[i,7]<-init.reg.caseload(init.know[,i+62])[[7]]
+    init.cov.caseload.matr2[i,8]<-init.reg.caseload(init.know[,i+62])[[8]]
+    rownames(init.cov.caseload.matr2)<-colnames(init.know[,c(63:67)])
+    colnames(init.cov.caseload.matr2)<-c("CHW_lowcaseload","p_value", "CI-lower", "CI-upper", "CHW_mediumcaseload","p_value", "CI-lower", "CI-upper")
+    init.cov.caseload.matr4<-rbind(init.cov.caseload.matr1, init.cov.caseload.matr2)
+  }
+  init.cov.caseload.matr4<-round(init.cov.caseload.matr4,4)
+
+  for (i in 1:8){
+    init.cov.caseload.matr3[i,1]<-init.pol.reg.caseload(init.know[,68])[[i]]
+    init.cov.caseload.matr3[i,2]<-init.pol.reg.caseload(init.know[,68])[[i+8]]
+    init.cov.caseload.matr3[i,3]<-init.pol.reg.caseload(init.know[,69])[[i]]
+    init.cov.caseload.matr3[i,4]<-init.pol.reg.caseload(init.know[,69])[[i+8]]
+    colnames(init.cov.caseload.matr3)<-c("@90floss once", "@90floss twice or more", "@96brush once", "@96brush twice or more")
+    rownames(init.cov.caseload.matr3)<-c("CHW_lowcaseload","p_value", "CI-lower", "CI-upper", "CHW_mediumcaseload","p_value", "CI-lower", "CI-upper")
+  }
+ init.cov.caseload.matr3<-round(init.cov.caseload.matr3,4)
+
+init.cov.caseload.matr4
+t(init.cov.caseload.matr3)
+init.cov.caseload<-rbind(init.cov.caseload.matr4,t(init.cov.caseload.matr3))
+init.cov.caseload
+
+##CBO
+init.log.reg.cbo<-function(x){
+  log.reg<-summary(glm(x~init.know$CBO_NMPP+init.know$CBO_Montefiore+init.know$CBO_Ryannena, family = binomial(link="logit")))
+  low.ci1<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci1<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  low.ci2<-exp(log.reg$coefficients[3,1]-1.96*log.reg$coefficients[3,2])
+  upper.ci2<-exp(log.reg$coefficients[3,1]+1.96*log.reg$coefficients[3,2])
+  low.ci3<-exp(log.reg$coefficients[4,1]-1.96*log.reg$coefficients[4,2])
+  upper.ci3<-exp(log.reg$coefficients[4,1]+1.96*log.reg$coefficients[4,2])
+  return(list(exp(log.reg$coefficients[2,1]), log.reg$coefficients[2,4], low.ci1, upper.ci1,exp(log.reg$coefficients[3,1]), log.reg$coefficients[3,4], low.ci2, upper.ci2,exp(log.reg$coefficients[4,1]), log.reg$coefficients[4,4], low.ci3, upper.ci3 ))
+}
+
+init.reg.cbo<-function(x){
+  lm.reg<-summary(lm(x~init.know$CBO_NMPP+init.know$CBO_Montefiore+init.know$CBO_Ryannena))
+  low.ci1<-lm.reg$coefficients[2,1]-1.96*lm.reg$coefficients[2,2]
+  upper.ci1<-lm.reg$coefficients[2,1]+1.96*lm.reg$coefficients[2,2]
+  low.ci2<-lm.reg$coefficients[3,1]-1.96*lm.reg$coefficients[3,2]
+  upper.ci2<-lm.reg$coefficients[3,1]+1.96*lm.reg$coefficients[3,2]
+  low.ci3<-lm.reg$coefficients[4,1]-1.96*lm.reg$coefficients[4,2]
+  upper.ci3<-lm.reg$coefficients[4,1]+1.96*lm.reg$coefficients[4,2]
+  return(list(lm.reg$coefficients[2,1], lm.reg$coefficients[2,4], low.ci1, upper.ci1, lm.reg$coefficients[3,1], lm.reg$coefficients[3,4], low.ci2, upper.ci2, lm.reg$coefficients[4,1], lm.reg$coefficients[4,4], low.ci3, upper.ci3))
+}
+
+
+init.pol.reg.cbo<-function(x){
+  pol.reg<-summary(multinom(x~init.know$CBO_NMPP+init.know$CBO_Montefiore+init.know$CBO_Ryannena))
+  coef.1<-exp(pol.reg$coefficients[1, 2])
+  coef.2<-exp(pol.reg$coefficients[1, 3])
+  coef.3<-exp(pol.reg$coefficients[1, 4])
+  coef.4<-exp(pol.reg$coefficients[2, 2])
+  coef.5<-exp(pol.reg$coefficients[2, 3])
+  coef.6<-exp(pol.reg$coefficients[2, 4])
+  
+  z<-pol.reg$coefficients/pol.reg$standard.errors
+  p<-(1 - pnorm(abs(z), 0, 1))*2
+  p1<-p[1, 2]
+  p2<-p[1, 3]
+  p3<-p[1, 4]
+  p4<-p[2, 2]
+  p5<-p[2, 3]
+  p6<-p[2, 4]
+  
+  low.ci1<-exp(pol.reg$coefficients[1, 2]-1.96*pol.reg$standard.errors[1, 2])
+  upper.ci1<-exp(pol.reg$coefficients[1, 2]+1.96*pol.reg$standard.errors[1, 2])
+  low.ci2<-exp(pol.reg$coefficients[1, 3]-1.96*pol.reg$standard.errors[1, 3])
+  upper.ci2<-exp(pol.reg$coefficients[1, 3]+1.96*pol.reg$standard.errors[1, 3])
+  low.ci3<-exp(pol.reg$coefficients[1, 4]-1.96*pol.reg$standard.errors[1, 4])
+  upper.ci3<-exp(pol.reg$coefficients[1, 4]+1.96*pol.reg$standard.errors[1, 4])
+  
+  low.ci4<-exp(pol.reg$coefficients[2, 2]-1.96*pol.reg$standard.errors[2, 2])
+  upper.ci4<-exp(pol.reg$coefficients[2, 2]+1.96*pol.reg$standard.errors[2, 2])
+  low.ci5<-exp(pol.reg$coefficients[2, 3]-1.96*pol.reg$standard.errors[2, 3])
+  upper.ci5<-exp(pol.reg$coefficients[2, 3]+1.96*pol.reg$standard.errors[2, 3])
+  low.ci6<-exp(pol.reg$coefficients[2, 4]-1.96*pol.reg$standard.errors[2, 4])
+  upper.ci6<-exp(pol.reg$coefficients[2, 4]+1.96*pol.reg$standard.errors[2, 4])
+  
+  return(list(coef.1, p1, low.ci1, upper.ci1,coef.2, p2, low.ci2, upper.ci2, coef.3, p3, low.ci3, upper.ci3,coef.4, p4, low.ci4, upper.ci4, coef.5, p5, low.ci5, upper.ci5, coef.6, p6, low.ci6, upper.ci6))
+}
+
+init.cov.cbo.matr1<-matrix(, 5, 12)
+init.cov.cbo.matr2<-matrix(, 5, 12)
+init.cov.cbo.matr3<-matrix(, 12, 4)
+
+for (i in 1:5){
+    init.cov.cbo.matr1[i,1]<-init.log.reg.cbo(init.know[,i+57])[[1]]
+    init.cov.cbo.matr1[i,2]<-init.log.reg.cbo(init.know[,i+57])[[2]]
+    init.cov.cbo.matr1[i,3]<-init.log.reg.cbo(init.know[,i+57])[[3]]
+    init.cov.cbo.matr1[i,4]<-init.log.reg.cbo(init.know[,i+57])[[4]]
+    init.cov.cbo.matr1[i,5]<-init.log.reg.cbo(init.know[,i+57])[[5]]
+    init.cov.cbo.matr1[i,6]<-init.log.reg.cbo(init.know[,i+57])[[6]]
+    init.cov.cbo.matr1[i,7]<-init.log.reg.cbo(init.know[,i+57])[[7]]
+    init.cov.cbo.matr1[i,8]<-init.log.reg.cbo(init.know[,i+57])[[8]]
+    init.cov.cbo.matr1[i,9]<-init.log.reg.cbo(init.know[,i+57])[[9]]
+    init.cov.cbo.matr1[i,10]<-init.log.reg.cbo(init.know[,i+57])[[10]]
+    init.cov.cbo.matr1[i,11]<-init.log.reg.cbo(init.know[,i+57])[[11]]
+    init.cov.cbo.matr1[i,12]<-init.log.reg.cbo(init.know[,i+57])[[12]]
+    rownames(init.cov.cbo.matr1)<-colnames(init.know[,c(58:62)])
+    colnames(init.cov.cbo.matr1)<-c("CBO_NMPP","p_value", "CI-lower", "CI-upper", "CBO_Montefiore","p_value", "CI-lower", "CI-upper", "CBO_Ryannena","p_value", "CI-lower", "CI-upper")
+    init.cov.cbo.matr2[i,1]<-init.reg.cbo(init.know[,i+62])[[1]]
+    init.cov.cbo.matr2[i,2]<-init.reg.cbo(init.know[,i+62])[[2]]
+    init.cov.cbo.matr2[i,3]<-init.reg.cbo(init.know[,i+62])[[3]]
+    init.cov.cbo.matr2[i,4]<-init.reg.cbo(init.know[,i+62])[[4]]
+    init.cov.cbo.matr2[i,5]<-init.reg.cbo(init.know[,i+62])[[5]]
+    init.cov.cbo.matr2[i,6]<-init.reg.cbo(init.know[,i+62])[[6]]
+    init.cov.cbo.matr2[i,7]<-init.reg.cbo(init.know[,i+62])[[7]]
+    init.cov.cbo.matr2[i,8]<-init.reg.cbo(init.know[,i+62])[[8]]
+    init.cov.cbo.matr2[i,9]<-init.reg.cbo(init.know[,i+62])[[9]]
+    init.cov.cbo.matr2[i,10]<-init.reg.cbo(init.know[,i+62])[[10]]
+    init.cov.cbo.matr2[i,11]<-init.reg.cbo(init.know[,i+62])[[11]]
+    init.cov.cbo.matr2[i,12]<-init.reg.cbo(init.know[,i+62])[[12]]
+    rownames(init.cov.cbo.matr2)<-colnames(init.know[,c(63:67)])
+    colnames(init.cov.cbo.matr2)<-c("CBO_NMPP","p_value", "CI-lower", "CI-upper", "CBO_Montefiore","p_value", "CI-lower", "CI-upper", "CBO_Ryannena","p_value", "CI-lower", "CI-upper")
+    init.cov.cbo.matr4<-rbind(init.cov.cbo.matr1, init.cov.cbo.matr2)
+  }
+  init.cov.cbo.matr4<-round(init.cov.cbo.matr4,4)
+
+  for (i in 1:12){
+    init.cov.cbo.matr3[i,1]<-init.pol.reg.cbo(init.know[,68])[[i]]
+    init.cov.cbo.matr3[i,2]<-init.pol.reg.cbo(init.know[,68])[[i+12]]
+    init.cov.cbo.matr3[i,3]<-init.pol.reg.cbo(init.know[,69])[[i]]
+    init.cov.cbo.matr3[i,4]<-init.pol.reg.cbo(init.know[,69])[[i+12]]
+    colnames(init.cov.cbo.matr3)<-c("@90floss once","@90floss twice or more", "@96brush once", "@96brush twice or more")
+    rownames(init.cov.cbo.matr3)<-c("CBO_NMPP","p_value", "CI-lower", "CI-upper", "CBO_Montefiore","p_value", "CI-lower", "CI-upper", "CBO_Ryannena","p_value", "CI-lower", "CI-upper")
+  }
+ init.cov.cbo.matr3<-round(init.cov.cbo.matr3,4)
+
+init.cov.cbo.matr4
+t(init.cov.cbo.matr3)
+init.cov.cbo<-rbind(init.cov.cbo.matr4,t(init.cov.cbo.matr3))
+init.cov.cbo
+```
+
+
+#2. Covariates in the childage dataset--regression model, logistic regression model, multinomial logistic regression model
+```{r}
+init.cov.age.matr1<-matrix(, 5, 4)
+init.cov.age.matr2<-matrix(, 5, 4)
+init.cov.age.matr3<-matrix(, 4, 4)
+
+for (i in 1:5){
+    init.cov.age.matr1[i,1]<-init.log.reg.know(init.childage[,i+2],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[1]]
+    init.cov.age.matr1[i,2]<-init.log.reg.know(init.childage[,i+2],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[2]]
+    init.cov.age.matr1[i,3]<-init.log.reg.know(init.childage[,i+2],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[3]]
+    init.cov.age.matr1[i,4]<-init.log.reg.know(init.childage[,i+2],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[4]]
+    rownames(init.cov.age.matr1)<-colnames(init.childage[,c(3:7)])
+    colnames(init.cov.age.matr1)<-c("child age", "p_value", "CI-lower", "CI-upper")
+    init.cov.age.matr1<-round(init.cov.age.matr1,4)
+}
+
+for (i in 1:5){
+    init.cov.age.matr2[i,1]<-init.reg.know(init.childage[,i+7],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[1]]
+    init.cov.age.matr2[i,2]<-init.reg.know(init.childage[,i+7],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[2]]
+    init.cov.age.matr2[i,3]<-init.reg.know(init.childage[,i+7],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[3]]
+    init.cov.age.matr2[i,4]<-init.reg.know(init.childage[,i+7],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[4]]
+    rownames(init.cov.age.matr2)<-colnames(init.childage[,c(8:12)])
+    colnames(init.cov.age.matr2)<-c("child age", "p_value", "CI-lower", "CI-upper")
+    init.cov.age.matr2<-round(init.cov.age.matr2,4)
+}
+  
+  init.cov.age.matr4<-rbind(init.cov.age.matr1, init.cov.age.matr2)
+
+for (i in 1:4){
+  init.cov.age.matr3[1,i]<-init.pol.reg.know(init.childage[,13],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[i]]
+  init.cov.age.matr3[2,i]<-init.pol.reg.know(init.childage[,13],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[i+4]]
+  init.cov.age.matr3[3,i]<-init.pol.reg.know(init.childage[,14],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[i]]
+  init.cov.age.matr3[4,i]<-init.pol.reg.know(init.childage[,14],init.childage$AGE_MONTHS_AT_INIT_EXAM)[[i+4]]
+  rownames(init.cov.age.matr3)<-c("@90floss once","@90floss twice or more", "@96brush once", "@96brush twice or more")
+  colnames(init.cov.age.matr3)<-c("child age", "p_value", "CI-lower", "CI-upper")
+  init.cov.age.matr3<-round(init.cov.age.matr3,4)
+}
+
+init.cov.age<-rbind(init.cov.age.matr4,init.cov.age.matr3)
+init.cov.age
+
+```
+
+#3. Covariates in the msb dataset--regression model, logistic regression model, multinomial logistic regression model
+```{r}
+init.msb.cov<-function(j){
+  co_matr1<-matrix( , 5, 4)
+  for(i in 1:5){
+    co_matr1[i,1]<-init.log.reg.know(init.mysb[,i+15],init.mysb[,j])[[1]]
+    co_matr1[i,2]<-init.log.reg.know(init.mysb[,i+15],init.mysb[,j])[[2]]
+    co_matr1[i,3]<-init.log.reg.know(init.mysb[,i+15],init.mysb[,j])[[3]]
+    co_matr1[i,4]<-init.log.reg.know(init.mysb[,i+15],init.mysb[,j])[[4]]
+    rownames(co_matr1)<-colnames(init.mysb[,c(16:20)])
+    colnames(co_matr1)<-c(colnames(init.mysb)[j], "p_value", "CI-lower", "CI-upper")
+  }
+  co_matr1<-round(co_matr1,4)
+  
+  co_matr2<-matrix( , 5, 4)
+  for(i in 1:5){
+    co_matr2[i,1]<-init.reg.know(init.mysb[,i+20],init.mysb[,j])[[1]]
+    co_matr2[i,2]<-init.reg.know(init.mysb[,i+20],init.mysb[,j])[[2]]
+    co_matr2[i,3]<-init.reg.know(init.mysb[,i+20],init.mysb[,j])[[3]]
+    co_matr2[i,4]<-init.reg.know(init.mysb[,i+20],init.mysb[,j])[[4]]
+    rownames(co_matr2)<-colnames(init.mysb[,c(21:25)])
+    colnames(co_matr2)<-c(colnames(init.mysb)[j], "p_value", "CI-lower", "CI-upper")
+  }
+  co_matr2<-round(co_matr2,4)  
+  
+  co_matr3<-matrix( , 4, 4)
+  for (i in 1:4){
+    co_matr3[1,i]<-init.pol.reg.know(init.mysb[,26],init.mysb[,j])[[i]]
+    co_matr3[2,i]<-init.pol.reg.know(init.mysb[,26],init.mysb[,j])[[i+4]]
+    co_matr3[3,i]<-init.pol.reg.know(init.mysb[,27],init.mysb[,j])[[i]]
+    co_matr3[4,i]<-init.pol.reg.know(init.mysb[,27],init.mysb[,j])[[i+4]]
+    rownames(co_matr3)<-c("@90floss once","@90floss twice or more", "@96brush once", "@96brush twice or more")
+    colnames(co_matr3)<-c(colnames(init.mysb)[j], "p_value", "CI-lower", "CI-upper")
+}
+  co_matr3<-round(co_matr3,4)
+  
+  co_matr4<-rbind(co_matr1, co_matr2, co_matr3)
+  return(co_matr4)
+}
+    
+init.cov.msb<-lapply(c(2, 6:15), init.msb.cov)
+init.cov.msb
+
+init.log.reg.pared<-function(x){
+  log.reg<-summary(glm(x~init.mysb$par_lesshsed+init.mysb$par_hsed, family = binomial(link="logit")))
+  low.ci1<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci1<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  low.ci2<-exp(log.reg$coefficients[3,1]-1.96*log.reg$coefficients[3,2])
+  upper.ci2<-exp(log.reg$coefficients[3,1]+1.96*log.reg$coefficients[3,2])
+  return(list(exp(log.reg$coefficients[2,1]), log.reg$coefficients[2,4], low.ci1, upper.ci1, exp(log.reg$coefficients[3,1]), log.reg$coefficients[3,4], low.ci2, upper.ci2 ))
+}
+
+init.reg.pared<-function(x){
+  lm.reg<-summary(lm(x~init.mysb$par_lesshsed+init.mysb$par_hsed))
+  low.ci1<-lm.reg$coefficients[2,1]-1.96*lm.reg$coefficients[2,2]
+  upper.ci1<-lm.reg$coefficients[2,1]+1.96*lm.reg$coefficients[2,2]
+  low.ci2<-lm.reg$coefficients[3,1]-1.96*lm.reg$coefficients[3,2]
+  upper.ci2<-lm.reg$coefficients[3,1]+1.96*lm.reg$coefficients[3,2]
+  return(list(lm.reg$coefficients[2,1], lm.reg$coefficients[2,4], low.ci1, upper.ci1, lm.reg$coefficients[3,1], lm.reg$coefficients[3,4], low.ci2, upper.ci2))
+}
+
+init.pol.reg.pared<-function(x){
+  pol.reg<-summary(multinom(x~init.mysb$par_lesshsed+init.mysb$par_hsed))
+  coef.1<-exp(pol.reg$coefficients[1, 2])
+  coef.2<-exp(pol.reg$coefficients[1, 3])
+  coef.3<-exp(pol.reg$coefficients[2, 2])
+  coef.4<-exp(pol.reg$coefficients[2, 3])
+  
+  z<-pol.reg$coefficients/pol.reg$standard.errors
+  p<-(1 - pnorm(abs(z), 0, 1))*2
+  p1<-p[1, 2]
+  p2<-p[1, 3]
+  p3<-p[2, 2]
+  p4<-p[2, 3]
+  low.ci1<-exp(pol.reg$coefficients[1, 2]-1.96*pol.reg$standard.errors[1, 2])
+  upper.ci1<-exp(pol.reg$coefficients[1, 2]+1.96*pol.reg$standard.errors[1, 2])
+  low.ci2<-exp(pol.reg$coefficients[1, 3]-1.96*pol.reg$standard.errors[1, 3])
+  upper.ci2<-exp(pol.reg$coefficients[1, 3]+1.96*pol.reg$standard.errors[1, 3])
+  low.ci3<-exp(pol.reg$coefficients[2, 2]-1.96*pol.reg$standard.errors[2, 2])
+  upper.ci3<-exp(pol.reg$coefficients[2, 2]+1.96*pol.reg$standard.errors[2, 2])
+  low.ci4<-exp(pol.reg$coefficients[2, 3]-1.96*pol.reg$standard.errors[2, 3])
+  upper.ci4<-exp(pol.reg$coefficients[2, 3]+1.96*pol.reg$standard.errors[2, 3])
+  return(list(coef.1, p1, low.ci1, upper.ci1,coef.2, p2, low.ci2, upper.ci2, coef.3, p3, low.ci3, upper.ci3,coef.4, p4, low.ci4, upper.ci4))
+}
+
+init.cov.pared.matr1<-matrix(, 5, 8)
+init.cov.pared.matr2<-matrix(, 5, 8)
+init.cov.pared.matr3<-matrix(, 8, 4)
+
+for (i in 1:5){
+  for (j in 1:8){
+    init.cov.pared.matr1[i,j]<-init.log.reg.pared(init.mysb[,i+15])[[j]]
+    rownames(init.cov.pared.matr1)<-colnames(init.mysb[,c(16:20)])
+    colnames(init.cov.pared.matr1)<-c("par less HS","p_value", "CI-lower", "CI-upper", "par HS","p_value", "CI-lower", "CI-upper")
+    init.cov.pared.matr2[i,j]<-init.reg.pared(init.mysb[,i+20])[[j]]
+    rownames(init.cov.pared.matr2)<-colnames(init.mysb[,c(21:25)])
+    colnames(init.cov.pared.matr2)<-c("par less HS","p_value", "CI-lower", "CI-upper", "par HS","p_value", "CI-lower", "CI-upper")
+    init.cov.pared.matr4<-rbind(init.cov.pared.matr1, init.cov.pared.matr2)
+  }
+}
+  init.cov.pared.matr4<-round(init.cov.pared.matr4,4)
+
+  for (i in 1:8){
+    init.cov.pared.matr3[i,1]<-init.pol.reg.pared(init.mysb[,26])[[i]]
+    init.cov.pared.matr3[i,2]<-init.pol.reg.pared(init.mysb[,26])[[i+8]]
+    init.cov.pared.matr3[i,3]<-init.pol.reg.pared(init.mysb[,27])[[i]]
+    init.cov.pared.matr3[i,4]<-init.pol.reg.pared(init.mysb[,27])[[i+8]]
+    colnames(init.cov.pared.matr3)<-c("@90floss once","@90floss twice or more", "@96brush once", "@96brush twice or more")
+    rownames(init.cov.pared.matr3)<-c("par less HS","p_value", "CI-lower", "CI-upper", "par HS","p_value", "CI-lower", "CI-upper")
+  }
+ init.cov.pared.matr3<-round(init.cov.pared.matr3,4)
+
+init.cov.pared<-rbind(init.cov.pared.matr4,t(init.cov.pared.matr3))
+init.cov.pared
+```
+
+#4. Covariates in the intervention dataset--regression model, logistic regression model, multinomial logistic regression model
+```{r}
+init.interven.cov<-function(j){
+  co_matr1<-matrix( , 5, 4)
+  for(i in 1:5){
+    co_matr1[i,1]<-init.log.reg.know(init.interven[,i+16],init.interven[,j])[[1]]
+    co_matr1[i,2]<-init.log.reg.know(init.interven[,i+16],init.interven[,j])[[2]]
+    co_matr1[i,3]<-init.log.reg.know(init.interven[,i+16],init.interven[,j])[[3]]
+    co_matr1[i,4]<-init.log.reg.know(init.interven[,i+16],init.interven[,j])[[4]]
+    rownames(co_matr1)<-colnames(init.interven[,c(17:21)])
+    colnames(co_matr1)<-c(colnames(init.interven)[j], "p_value", "CI-lower", "CI-upper")
+  }
+  co_matr1<-round(co_matr1,4)
+  
+  co_matr2<-matrix( , 5, 4)
+  for(i in 1:5){
+    co_matr2[i,1]<-init.reg.know(init.interven[,i+21],init.interven[,j])[[1]]
+    co_matr2[i,2]<-init.reg.know(init.interven[,i+21],init.interven[,j])[[2]]
+    co_matr2[i,3]<-init.reg.know(init.interven[,i+21],init.interven[,j])[[3]]
+    co_matr2[i,4]<-init.reg.know(init.interven[,i+21],init.interven[,j])[[4]]
+    rownames(co_matr2)<-colnames(init.interven[,c(22:26)])
+    colnames(co_matr2)<-c(colnames(init.interven)[j], "p_value", "CI-lower", "CI-upper")
+  }
+  co_matr2<-round(co_matr2,4)  
+  
+  co_matr3<-matrix( , 4, 4)
+  for (i in 1:4){
+    co_matr3[1,i]<-init.pol.reg.know(init.interven[,27],init.interven[,j])[[i]]
+    co_matr3[2,i]<-init.pol.reg.know(init.interven[,27],init.interven[,j])[[i+4]]
+    co_matr3[3,i]<-init.pol.reg.know(init.interven[,28],init.interven[,j])[[i]]
+    co_matr3[4,i]<-init.pol.reg.know(init.interven[,28],init.interven[,j])[[i+4]]
+    rownames(co_matr3)<-c("@90floss once","@90floss twice or more", "@96brush once", "@96brush twice or more")
+    colnames(co_matr3)<-c(colnames(init.interven)[j], "p_value", "CI-lower", "CI-upper")
+}
+  co_matr3<-round(co_matr3,4)
+  
+  co_matr4<-rbind(co_matr1, co_matr2,co_matr3)
+  return(co_matr4)
+}
+    
+init.cov.inter<-lapply(c(9:16), init.interven.cov)
+init.cov.inter
+```
+
+
+```{r}
+##child-level
+init.cov.age
+init.cov.know[[1]]
+init.cov.msb[[1]]
+
+##parent-level
+for(i in 1:5){
+  print(init.cov.know[[i+1]])
+}
+
+for(i in 1:10){
+  print(init.cov.msb[[i+1]])
+}
+
+init.cov.pared
+
+##chw-level
+for(i in 1:6){
+  print(init.cov.know[[i+6]])
+}
+for(i in 1:4){
+  print(init.cov.know[[i+44]])
+}
+init.cov.caseload   
+init.cov.cbo
+
+
+##intervention-level
+init.cov.inter
+
+
+##knowledge level(change-score)
+for(i in 1:16){
+  print(init.cov.know[[i+12]])
+}
+
+
+##knowledge level(binary)
+for(i in 1:16){
+  print(init.cov.know[[i+28]])
+}
+```
+
+
+#5. for two change variables (3 categories)
+```{r}
+
+know9096<-merge(know[, c(1, 124:175, 236:239)], msb_outcome[, c(1, 24,25)], by="msb_id") 
+dim(know9096)
+
+##there are 639 subjects after merging the child age data and the two change variable
+childage9096<-merge(pattern[,c(1, 4)], msb_outcome[, c(1, 24,25)], by="msb_id") 
+dim(childage9096)
+
+##there are 883 subjects after merging the msb data (parent-level) and the two change variable
+mysb9096<-merge(mysb, msb_outcome[, c(1, 24,25)], by="msb_id")
+dim(mysb9096)
+
+##there are 815 subjects after merging the intervention-level data and the two change variable
+interven9096<-merge(num_touch, msb_outcome[, c(1, 24,25)], by="msb_id")
+dim(interven9096)
+
+
+change.log.reg.2<-function(x, y){
+  log.reg<-summary(glm(x~y, family = binomial(link="logit")))
+  low.ci<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  return(list(exp(log.reg$coefficients[2,1]), log.reg$coefficients[2,4], low.ci, upper.ci))
+}
+
+change.log.reg.3<-function(x, y1, y2){
+  log.reg<-summary(glm(x~y1+y2, family = binomial(link="logit")))
+  low.ci1<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci1<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  
+  low.ci2<-exp(log.reg$coefficients[3,1]-1.96*log.reg$coefficients[3,2])
+  upper.ci2<-exp(log.reg$coefficients[3,1]+1.96*log.reg$coefficients[3,2])
+  return(list(exp(log.reg$coefficients[2,1]), log.reg$coefficients[2,4], low.ci1, upper.ci1, exp(log.reg$coefficients[3,1]), log.reg$coefficients[3,4], low.ci2, upper.ci2))
+}
+
+change.log.reg.4<-function(x, y1, y2, y3){
+  log.reg<-summary(glm(x~y1+y2+y3, family = binomial(link="logit")))
+  low.ci1<-exp(log.reg$coefficients[2,1]-1.96*log.reg$coefficients[2,2])
+  upper.ci1<-exp(log.reg$coefficients[2,1]+1.96*log.reg$coefficients[2,2])
+  
+  low.ci2<-exp(log.reg$coefficients[3,1]-1.96*log.reg$coefficients[3,2])
+  upper.ci2<-exp(log.reg$coefficients[3,1]+1.96*log.reg$coefficients[3,2])
+  
+  low.ci3<-exp(log.reg$coefficients[4,1]-1.96*log.reg$coefficients[4,2])
+  upper.ci3<-exp(log.reg$coefficients[4,1]+1.96*log.reg$coefficients[4,2])
+  return(list(exp(log.reg$coefficients[2,1]), log.reg$coefficients[2,4], low.ci1, upper.ci1, exp(log.reg$coefficients[3,1]), log.reg$coefficients[3,4], low.ci2, upper.ci2, exp(log.reg$coefficients[4,1]), log.reg$coefficients[4,4], low.ci3, upper.ci3))
+}
+
+##knowledge
+change.90.96.know<-function(j){
+  change.ma<-matrix(, 2,4)
+  for (i in 1:4){
+      change.ma[1, i]<-change.log.reg.2(know9096[,58], know9096[,j])[[i]]
+      change.ma[2, i]<-change.log.reg.2(know9096[,59], know9096[,j])[[i]]
+   colnames(change.ma)<-c(colnames(know9096)[j], "p_value", "CI-lower", "CI-upper")
+   change.ma<-round(change.ma,4)
+  }
+
+  rownames(change.ma)<-c("@90floss", "@96brush")
+
+    return(change.ma)
+}
+ 
+change.90.96.know<-lapply(c(2:7, 10:15, 22:57), change.90.96.know)
+change.90.96.know
+
+change.caseload9096<-matrix(, 2, 8)
+for (i in 1:8){
+  change.caseload9096[1, i]<-change.log.reg.3(know9096$`change@90flossing`, know9096$CHW_lowcaseload, know9096$CHW_mediumcaseload)[[i]]
+  change.caseload9096[2, i]<-change.log.reg.3(know9096$`change@96brushing`, know9096$CHW_lowcaseload, know9096$CHW_mediumcaseload)[[i]]
+    colnames(change.caseload9096)<-c("CHW_lowcaseload", "p_value","CI-lower", "CI-upper", "CHW_mediumcaseload", "p-value","CI-lower", "CI-upper")
+   rownames(change.caseload9096)<-c("@90floss", "@96brush")
+   change.caseload9096<-round(change.caseload9096,4)
+}
+change.caseload9096
+
+
+change.cbo9096<-matrix(, 2, 12)
+for (i in 1:12){
+  change.cbo9096[1, i]<-change.log.reg.4(know9096$`change@90flossing`, know9096$CBO_Montefiore, know9096$CBO_NMPP, know9096$CBO_Ryannena)[[i]]
+  change.cbo9096[2, i]<-change.log.reg.4(know9096$`change@96brushing`, know9096$CBO_Montefiore, know9096$CBO_NMPP, know9096$CBO_Ryannena)[[i]]
+    colnames(change.cbo9096)<-c("CBO_NMPP", "p_value","CI-lower", "CI-upper", "CBO_Montefiore", "p-value","CI-lower", "CI-upper","CBO_Ryannena", "p-value","CI-lower", "CI-upper")
+   rownames(change.cbo9096)<-c("@90floss", "@96brush")
+   change.cbo9096<-round(change.cbo9096,4)
+}
+change.cbo9096
+
+##child age
+change.age9096<-matrix(, 2, 4)
+for (i in 1:4){
+  change.age9096[1, i]<-change.log.reg.2(childage9096$`change@90flossing`, childage9096$AGE_MONTHS_AT_INIT_EXAM)[[i]]
+  change.age9096[2, i]<-change.log.reg.2(childage9096$`change@96brushing`, childage9096$AGE_MONTHS_AT_INIT_EXAM)[[i]]
+    colnames(change.age9096)<-c("child age", "p_value","CI-lower", "CI-upper")
+   rownames(change.age9096)<-c("@90flossing_frequency", "@96brushing_frequency")
+   change.age9096<-round(change.age9096,4)
+}
+change.age9096
+
+##mysb
+change.90.96.msb<-function(j){
+  change.ma<-matrix(, 2,4)
+  for (i in 1:4){
+      change.ma[1, i]<-change.log.reg.2(mysb9096[,16], mysb9096[,j])[[i]]
+      change.ma[2, i]<-change.log.reg.2(mysb9096[,17], mysb9096[,j])[[i]]
+   colnames(change.ma)<-c(colnames(mysb9096)[j], "p_value", "CI-lower", "CI-upper")
+   change.ma<-round(change.ma,4)
+  }
+
+  rownames(change.ma)<-c("@90floss", "@96brush")
+    return(change.ma)
+}
+  
+change.90.96.mysb<-lapply(c(2, 6:15), change.90.96.msb)
+change.90.96.mysb
+
+change.pared9096<-matrix(, 2, 8)
+for (i in 1:8){
+  change.pared9096[1, i]<-change.log.reg.3(mysb9096$`change@90flossing`, mysb9096$par_lesshsed, mysb9096$par_hsed)[[i]]
+  change.pared9096[2, i]<-change.log.reg.3(mysb9096$`change@96brushing`, mysb9096$par_lesshsed, mysb9096$par_hsed)[[i]]
+  colnames(change.pared9096)<-c("par less than high school", "p_value","CI-lower", "CI-upper", "par high school", "p-value","CI-lower", "CI-upper")
+   rownames(change.pared9096)<-c("@90floss", "@96brush")
+   change.pared9096<-round(change.pared9096,4)
+}
+change.pared9096
+
+
+###intervention
+change.90.96.intervention<-function(j){
+  change.ma<-matrix(, 2,4)
+  for (i in 1:4){
+      change.ma[1, i]<-change.log.reg.2(interven9096[,17], interven9096[,j])[[i]]
+      change.ma[2, i]<-change.log.reg.2(interven9096[,18], interven9096[,j])[[i]]
+   colnames(change.ma)<-c(colnames(interven9096)[j], "p_value", "CI-lower", "CI-upper")
+   change.ma<-round(change.ma,4)
+  }
+
+  rownames(change.ma)<-c("@90floss", "@96brush")
+    return(change.ma)
+}
+  
+change.90.96.inter<-lapply(c(9:16), change.90.96.intervention)
+change.90.96.inter
+```
+

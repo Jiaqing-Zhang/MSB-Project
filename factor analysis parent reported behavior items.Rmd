@@ -1,0 +1,90 @@
+---
+title: "factor analysis parent reported behavior items 2"
+author: "Jiaqing Zhang"
+output: word_document
+---
+##import dataset
+```{r, import data}
+library(haven)
+msb_outcome<- read_sav("~/parent behavior items/MSB_AGG.sav")
+```
+
+#1.conduct the factor analysis for the continuous variables
+```{r}
+#correlation matrix  
+prb.con<-msb_outcome[complete.cases(msb_outcome[, 7:11]),]
+prb.cor<-round(cor(prb.con[, 7:11]),3)
+prb.cor
+
+#visualize the correlation matrixvisualize the correlation matrix
+library(corrplot)
+    ##ordered by first principal component scores
+corrplot(prb.cor, order = "FPC")
+```
+
+
+##2. PCA analysis to reduce a set of observed variables
+  ##2.1 eigen values and eigen vectors
+```{R eigen values and eigen vectors}
+#eigen values and eigen vectors
+eigenvalue<-round (eigen(prb.cor)$values, 2)
+eigenvector<-round (eigen(prb.cor)$vectors, 2)
+eigenvalue
+eigenvector
+```
+
+  ##2.2 princomp and determine the number of components
+```{R princomp}
+pca_pri<-princomp(prb.con[, 7:11], cor=TRUE)
+summary(pca_pri)
+#loadings in princomp are eigenvector
+
+#determine number of components
+    ##eigen values and eigen vectors; method 1-based on eigen values (decision rule:larger than 1), we choose 2 components.
+    sum(round(eigenvalue,2)>1)
+    #method 2-proportion of total variance explained (account for 80%), we choose 4 components.
+    cumsum(eigenvalue/sum(eigenvalue))
+    ##method 3-scree plot (prior to the elbow), we choose 5 components.
+    plot(pca_pri, type="l", main="scree plot")
+    ##method 4-parallel test, we choose 2 components.
+    library(paran)
+    paran(prb.con[, 7:11], iterations = 5000, centile=0, quietly = FALSE,, status = TRUE, all=TRUE, cfa=FALSE, graph=TRUE, color=TRUE, col=c("black", "red", "blue"), lty=c(1,2,3))
+  
+```    
+    
+  ##2.3 3 components
+        first component will include: 71, 73
+        second component will include: 79, 80, 82
+        
+```{R, 2 components}    
+#the results suggested 2 components
+library(psych)
+prin_pca<-principal(prb.con[, 7:11], nfactors=2,covar=FALSE, scores=TRUE,rotate="varimax")
+   ##loadings
+   prin_pca$loadings
+   ##communality
+   prin_pca$communality
+#visualize the structure of the pc 
+library(qgraph)
+qgraph.pca(prb.con[, 7:11], factors=2, rotation = "varimax", layout="tree",cut=0.4, minimum=0.2, label.cex=1.5)
+```
+##3. Cronbach's alpha analysis for 5 items:
+     raw-alpha=0.75, indicate good reliability; 
+     if re-3, re-9, re-16 are dropped, we will have a higher reliability; 
+     if we drop 1, 2, 4, 10, 11, 13, the reliability will remain the same. 
+     
+     With three components:
+     first component: the total reliability is 0.77.
+     second component: the total reliability is 0.77.
+     third component: the total reliability is 0.21.
+
+```{R reliability analysis}
+#reliability for items within each components 
+  #with two components
+      #first
+      rela_pri1st<-alpha(prb.con[, 7:8])
+      rela_pri1st
+      #second
+      rela_pri2nd<-alpha(prb.con[, 9:11])
+      rela_pri2nd
+```
