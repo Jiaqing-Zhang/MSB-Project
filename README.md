@@ -3,6 +3,7 @@ R code for MSB: Analyses on six sections --> knowledge, quality of life, diet, h
 
 ## Data
 * 1250 index subjects 
+* Two time points
 * 10+ datasets
 * variables including demographic information for subjects and workers, parents' knowledge and quality of life survey, kids' dental clinical outcomes, etc. 
 
