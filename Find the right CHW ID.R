@@ -1,16 +1,3 @@
----
-title: "Data Cleaning: match CHW"
-author: "Jiaqing Zhang"
-output:
-  word_document: default
-  pdf_document:
-    highlight: haddock
-  html_document:
-    highlight: haddock
-    theme: journal
----
-
-```{r}
 library(haven)
 
 original_know<-read_sav("/knowledge data/Participant PRE_FINAL KNOWLEDGE survey_RE.sav")
@@ -46,4 +33,3 @@ exist_link<-subset(chw_link_id, !(chw_link_id$MSB %in% know_id$MSB))
 colnames(exist_link)<-c("MSB", "link_chw")
 exist_link
 dim(exist_link)
-```
